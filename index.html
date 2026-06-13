@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Замок-отмычка — Готика</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:system-ui,sans-serif;background:#1a1612;color:#e8dcc8;padding:16px;max-width:700px;margin:0 auto;min-height:100vh;}
+h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacing:0.04em;text-transform:uppercase;}
+
+.tab-bar{display:flex;margin-bottom:16px;background:#2a2420;border-radius:10px;padding:3px;gap:3px;width:fit-content;}
+.tab{padding:7px 18px;font-size:13px;cursor:pointer;background:transparent;color:#7a6a58;border:none;border-radius:7px;transition:all 0.18s;font-weight:500;}
+.tab.active{background:#c9a96e;color:#1a1612;font-weight:600;}
+.tab:hover:not(.active){background:#3a3028;color:#c9a96e;}
+
+.hint-sm{font-size:12px;color:#7a6a58;margin-bottom:12px;line-height:1.5;}
+
+.rail-wrap{display:flex;align-items:center;gap:10px;margin-bottom:8px;}
+.rlbl{width:20px;font-size:12px;font-weight:600;color:#7a6a58;text-align:right;flex-shrink:0;}
+
+/* трек — прямоугольный паз */
+.track{position:relative;width:238px;height:36px;background:#0e0c0a;border-radius:4px;overflow:hidden;flex-shrink:0;border:1px solid #3a3028;}
+.track-inner{display:flex;position:absolute;top:0;left:0;height:100%;transition:left 0.15s cubic-bezier(.4,0,.2,1);}
+
+/* рейка — скруглённая пластина */
+.tcell{width:34px;height:36px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;background:transparent;flex-shrink:0;}
+.rail-plate{
+  width:30px;height:28px;
+  background:linear-gradient(180deg,#4a3e2e,#2e2418);
+  border-radius:6px;
+  display:flex;align-items:center;justify-content:center;
+  border:1px solid #5a4a34;
+  box-shadow:0 1px 3px rgba(0,0,0,0.5);
+}
+.tcell.pin .rail-plate{
+  background:linear-gradient(180deg,#5a4e3a,#3a2e1e);
+  border-color:#7a6a4a;
+}
+.tcell.pad .rail-plate{
+  background:transparent;border:none;box-shadow:none;
+}
+
+.pin-dot{width:14px;height:14px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#7ab3e0,#2a6aaa);box-shadow:0 0 7px rgba(58,138,210,0.6);transition:background 0.2s,box-shadow 0.2s;}
+.pin-ok .pin-dot{background:radial-gradient(circle at 35% 35%,#a8d878,#4a8a1a);box-shadow:0 0 10px rgba(100,180,40,0.7);}
+
+.center-line{position:absolute;left:50%;top:4px;bottom:4px;width:2px;background:linear-gradient(to bottom,transparent,#c9a96e,transparent);pointer-events:none;transform:translateX(-50%);border-radius:1px;z-index:2;}
+
+.move-btns{display:flex;gap:5px;}
+.mbtn{width:30px;height:30px;border:1px solid #3a3028;border-radius:50%;background:#2a2420;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;color:#c9a96e;transition:all 0.15s;line-height:1;}
+.mbtn:hover:not(:disabled){background:#c9a96e;color:#1a1612;border-color:#c9a96e;transform:scale(1.1);}
+.mbtn:active:not(:disabled){transform:scale(0.95);}
+.mbtn:disabled{opacity:0.2;cursor:not-allowed;}
+
+.btns{display:flex;gap:8px;flex-wrap:wrap;margin:14px 0 8px;}
+.btn{padding:8px 18px;font-size:13px;border:1px solid #3a3028;border-radius:20px;background:#2a2420;cursor:pointer;color:#a08060;font-weight:500;transition:all 0.15s;}
+.btn:hover{background:#3a3028;color:#c9a96e;border-color:#5a4a38;}
+.btn.primary{background:linear-gradient(135deg,#c9a96e,#a07840);border-color:#c9a96e;color:#1a1612;font-weight:600;}
+.btn.primary:hover{background:linear-gradient(135deg,#dab97e,#b08850);transform:translateY(-1px);}
+.btn.primary:active{transform:translateY(0);}
+
+/* логика — правила */
+.rule-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
+.rule-lbl{font-size:13px;color:#7a6a58;min-width:110px;}
+.dep-chip{display:flex;align-items:center;gap:5px;padding:4px 10px;border:1px solid #3a3028;border-radius:20px;font-size:12px;background:#2a2420;}
+.dep-chip select{border:none;background:transparent;font-size:12px;color:#c9a96e;cursor:pointer;padding:0;}
+.dep-chip select option{background:#2a2420;color:#c9a96e;}
+.add-dep{
+  width:26px;height:26px;
+  font-size:16px;line-height:1;
+  border:1px solid #c9a96e;
+  border-radius:50%;
+  background:transparent;
+  cursor:pointer;
+  color:#c9a96e;
+  display:flex;align-items:center;justify-content:center;
+  transition:all 0.15s;
+  font-weight:300;
+}
+.add-dep:hover{background:#c9a96e;color:#1a1612;transform:scale(1.1);}
+.del-dep{cursor:pointer;color:#5a4a38;font-size:15px;line-height:1;border:none;background:none;padding:0 2px;transition:color 0.15s;}
+.del-dep:hover{color:#c05050;}
+
+.pos-num{font-size:12px;color:#5a4a38;min-width:14px;}
+
+/* решение */
+.sol-header{font-size:13px;color:#7a6a58;padding:6px 0 10px;border-bottom:1px solid #2a2420;margin-bottom:8px;}
+.step-card{display:flex;align-items:center;gap:12px;padding:10px 12px;margin-bottom:6px;background:#2a2420;border-radius:10px;border:1px solid #3a3028;transition:background 0.15s;}
+.step-card:hover{background:#342e26;}
+.step-num{width:26px;height:26px;border-radius:50%;background:#c9a96e;color:#1a1612;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.step-body{flex:1;}
+.step-action{font-size:14px;font-weight:600;color:#e8dcc8;}
+.step-action .dir-arrow{color:#c9a96e;margin-left:4px;}
+.step-pos{font-size:11px;color:#5a4a38;margin-top:2px;font-family:monospace;letter-spacing:0.05em;}
+.success-banner{display:flex;align-items:center;gap:10px;padding:12px 16px;background:#1a2e14;border:1px solid #4a8a1a;border-radius:10px;margin-top:8px;color:#a8d878;font-weight:600;font-size:14px;}
+.danger-banner{padding:10px 14px;background:#2e1414;border:1px solid #8a2a2a;border-radius:10px;color:#e07070;font-size:13px;}
+.play-hint{font-size:13px;color:#7a6a58;padding:4px 0 8px;}
+.play-hint.won{color:#a8d878;font-weight:600;}
+
+/* переключатель реек */
+.rails-switcher{display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap;}
+.rails-switcher span{font-size:12px;color:#7a6a58;}
+.rsw-btn{padding:5px 12px;font-size:12px;border:1px solid #3a3028;border-radius:20px;background:#2a2420;cursor:pointer;color:#7a6a58;transition:all 0.15s;font-weight:500;}
+.rsw-btn.active{background:#c9a96e;color:#1a1612;border-color:#c9a96e;font-weight:600;}
+.rsw-btn:hover:not(.active){border-color:#5a4a38;color:#c9a96e;}
+.rail-wrap.disabled{opacity:0.25;pointer-events:none;}
+.warn-7{display:none;margin-top:8px;padding:8px 12px;background:#2e1414;border:1px solid #8a2a2a;border-radius:8px;color:#e07070;font-size:12px;line-height:1.5;}
+
+/* обратная связь */
+.feedback-wrap{margin-top:24px;padding-top:16px;border-top:1px solid #2a2420;}
+.feedback-toggle{font-size:12px;color:#5a4a38;cursor:pointer;background:none;border:none;padding:0;transition:color 0.15s;text-decoration:underline;text-underline-offset:3px;}
+.feedback-toggle:hover{color:#c9a96e;}
+.feedback-box{margin-top:10px;display:none;}
+.feedback-box textarea{width:100%;height:80px;background:#2a2420;border:1px solid #3a3028;border-radius:8px;color:#e8dcc8;font-size:13px;padding:10px;resize:none;font-family:inherit;outline:none;transition:border 0.15s;}
+.feedback-box textarea:focus{border-color:#c9a96e;}
+.feedback-counter{font-size:11px;color:#5a4a38;text-align:right;margin-top:3px;}
+.feedback-counter.warn{color:#c9a96e;}
+.feedback-send{margin-top:8px;padding:6px 16px;font-size:13px;border:1px solid #c9a96e;border-radius:20px;background:transparent;cursor:pointer;color:#c9a96e;transition:all 0.15s;font-weight:500;}
+.feedback-send:hover{background:#c9a96e;color:#1a1612;}
+.feedback-sent{font-size:13px;color:#a8d878;padding:6px 0;}
+</style>
+</head>
+<body>
+<h1>⚙ Замок-отмычка</h1>
+
+<div class="tab-bar">
+  <button class="tab active" id="tab-rules" onclick="switchTab('rules')">Логика</button>
+  <button class="tab" id="tab-setup" onclick="switchTab('setup')">Позиция</button>
+</div>
+
+<div id="panel-rules">
+  <div class="hint-sm">Для каждой рейки задай зависимые рейки и направление.<br>«=» — туда же, «≠» — в противоположную сторону.</div>
+  <div class="rails-switcher">
+    <span>Реек в замке:</span>
+    <button class="rsw-btn" id="rsw-4" onclick="setActiveRails(4)">4</button>
+    <button class="rsw-btn" id="rsw-5" onclick="setActiveRails(5)">5</button>
+    <button class="rsw-btn active" id="rsw-6" onclick="setActiveRails(6)">6</button>
+    <button class="rsw-btn" id="rsw-7" onclick="setActiveRails(7)">7</button>
+  </div>
+  <div class="warn-7" id="warn-7">⚠️ 7 реек — поиск решения может занять несколько секунд. Это нормально.</div>
+  <div id="rules-grid"></div>
+  <div class="btns">
+    <button class="btn primary" onclick="switchTab('setup')">Далее — позиция →</button>
+    <button class="btn" onclick="resetRules()">Сброс правил</button>
+  </div>
+</div>
+
+<div id="panel-setup" style="display:none;">
+  <div class="hint-sm">Золотая линия — центр замочной скважины.</div>
+  <div id="setup-grid"></div>
+  <div class="btns">
+    <button class="btn primary" id="btn-crack">Взломать 🔓</button>
+    <button class="btn" onclick="resetSetup()">Сброс позиций</button>
+  </div>
+  <div id="setup-hint" style="font-size:12px;color:#5a4a38;margin-top:4px;"></div>
+  <div id="sol-area" style="margin-top:8px;"></div>
+</div>
+
+<!-- блок обратной связи — вне панелей, всегда внизу -->
+<div class="feedback-wrap">
+  <button class="feedback-toggle" id="fb-toggle" onclick="toggleFeedback()">💬 Оставить отзыв</button>
+  <div class="feedback-box" id="fb-box">
+    <textarea id="fb-text" maxlength="300" placeholder="Напиши что думаешь — баги, идеи, впечатления..." oninput="fbCount()"></textarea>
+    <div class="feedback-counter" id="fb-counter">0 / 300</div>
+    <button class="feedback-send" onclick="sendFeedback()">Отправить</button>
+    <div class="feedback-sent" id="fb-sent" style="display:none;">✓ Отправлено, спасибо!</div>
+  </div>
+</div>
+
+</div>
+
+<script>
+const SIZE=7,CENTER=3,CELL=34,PAD=3,N=7;
+let N_ACTIVE=6;
+let rules=Array.from({length:N},()=>[]);
+let initial=Array(N).fill(0);
+
+function clamp(v){return Math.max(0,Math.min(SIZE-1,v));}
+
+function getAffected(rail,dir){
+  const i=rail-1;
+  const moves=[{i,d:dir}];
+  rules[i].forEach(({dep,dir:rd})=>moves.push({i:dep,d:dir*rd}));
+  return moves;
+}
+function canMove(state,rail,dir){
+  return getAffected(rail,dir).every(({i,d})=>{const np=state[i]+d;return np>=0&&np<SIZE;});
+}
+function applyMove(state,rail,dir){
+  if(!canMove(state,rail,dir))return null;
+  const s=[...state];
+  getAffected(rail,dir).forEach(({i,d})=>{s[i]=clamp(s[i]+d);});
+  return s;
+}
+function eq(a,b){return a.every((v,i)=>v===b[i]);}
+
+function bfs(start){
+  const activeGoal=Array(N_ACTIVE).fill(3);
+  if(eq(start.slice(0,N_ACTIVE),activeGoal))return[];
+  const goal=Array(N).fill(3);
+  const queue=[[start,[]]];
+  const vis=new Set([start.join(',')]);
+  while(queue.length){
+    const [cur,path]=queue.shift();
+    if(path.length>=100)continue;
+    for(let r=1;r<=N_ACTIVE;r++){
+      for(const d of[-1,1]){
+        const ns=applyMove(cur,r,d);
+        if(!ns)continue;
+        const k=ns.join(',');
+        if(vis.has(k))continue;
+        vis.add(k);
+        const np=[...path,{rail:r,dir:d,state:ns}];
+        if(eq(ns.slice(0,N_ACTIVE),activeGoal))return np;
+        queue.push([ns,np]);
+      }
+    }
+  }
+  return null;
+}
+
+function setActiveRails(n){
+  N_ACTIVE=n;
+  [4,5,6,7].forEach(v=>{
+    const b=document.getElementById('rsw-'+v);
+    if(b)b.className='rsw-btn'+(v===n?' active':'');
+  });
+  const w=document.getElementById('warn-7');
+  if(w)w.style.display=n===7?'block':'none';
+  renderRulesGrid();
+  renderSetup();
+}
+
+function toggleFeedback(){
+  const box=document.getElementById('fb-box');
+  box.style.display=box.style.display==='none'?'block':'none';
+  document.getElementById('fb-sent').style.display='none';
+}
+
+function fbCount(){
+  const t=document.getElementById('fb-text');
+  const c=document.getElementById('fb-counter');
+  const len=t.value.length;
+  c.textContent=`${len} / 300`;
+  c.className='feedback-counter'+(len>250?' warn':'');
+}
+
+function sendFeedback(){
+  const msg=document.getElementById('fb-text').value.trim();
+  if(!msg)return;
+  const user=window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const userName=user?(user.username?'@'+user.username:user.first_name)||'Аноним':'Аноним';
+  sendFeedback(msg, userName);
+  document.getElementById('fb-sent').style.display='block';
+  document.getElementById('fb-text').value='';
+  document.getElementById('fb-counter').textContent='0 / 300';
+  setTimeout(()=>{
+    document.getElementById('fb-box').style.display='none';
+    document.getElementById('fb-sent').style.display='none';
+  },2000);
+}
+
+function renderRulesGrid(){
+  const g=document.getElementById('rules-grid');g.innerHTML='';
+  rules.slice(0,N_ACTIVE).forEach((deps,i)=>{
+    const row=document.createElement('div');row.className='rule-row';
+    const lbl=document.createElement('div');lbl.className='rule-lbl';
+    lbl.textContent=`Рейка ${i+1} двигает:`;row.appendChild(lbl);
+    deps.forEach((dep,j)=>{
+      const chip=document.createElement('div');chip.className='dep-chip';
+      const selR=document.createElement('select');
+      for(let r=0;r<N_ACTIVE;r++){
+        if(r===i)continue;
+        const o=document.createElement('option');o.value=r;o.textContent=`рейку ${r+1}`;
+        if(r===dep.dep)o.selected=true;selR.appendChild(o);
+      }
+      selR.onchange=()=>{rules[i][j].dep=+selR.value;};
+      const selD=document.createElement('select');
+      [['= (туда же)',1],['≠ (наоборот)',-1]].forEach(([txt,val])=>{
+        const o=document.createElement('option');o.value=val;o.textContent=txt;
+        if(dep.dir===val)o.selected=true;selD.appendChild(o);
+      });
+      selD.onchange=()=>{rules[i][j].dir=+selD.value;};
+      const del=document.createElement('button');del.className='del-dep';del.textContent='×';
+      del.onclick=()=>{rules[i].splice(j,1);renderRulesGrid();};
+      chip.appendChild(selR);chip.appendChild(selD);chip.appendChild(del);
+      row.appendChild(chip);
+    });
+    const add=document.createElement('button');add.className='add-dep';add.textContent='+';
+    add.title='Добавить зависимость';
+    add.onclick=()=>{
+      const used=deps.map(d=>d.dep);
+      const free=[...Array(N).keys()].filter(r=>r!==i&&!used.includes(r));
+      if(!free.length)return;
+      rules[i].push({dep:free[0],dir:1});renderRulesGrid();
+    };
+    row.appendChild(add);g.appendChild(row);
+  });
+}
+
+function resetRules(){rules=Array.from({length:N},()=>[]);renderRulesGrid();}
+
+function makeTrack(pinPos){
+  const track=document.createElement('div');track.className='track';
+  const cl=document.createElement('div');cl.className='center-line';track.appendChild(cl);
+  const inner=document.createElement('div');inner.className='track-inner';
+  inner.style.width=((SIZE+PAD*2)*CELL)+'px';
+  inner.style.left=((CENTER-(pinPos+PAD))*CELL)+'px';
+  for(let j=0;j<SIZE+PAD*2;j++){
+    const rj=j-PAD;
+    const c=document.createElement('div');
+    const plate=document.createElement('div');plate.className='rail-plate';
+    if(rj<0||rj>=SIZE){
+      c.className='tcell pad';
+      plate.style.cssText='background:transparent;border:none;box-shadow:none;';
+    } else {
+      const isPin=rj===pinPos;
+      c.className='tcell'+(isPin?' pin'+(pinPos===CENTER?' pin-ok':''):'');
+      if(isPin){const d=document.createElement('div');d.className='pin-dot';plate.appendChild(d);}
+    }
+    c.appendChild(plate);
+    inner.appendChild(c);
+  }
+  track.appendChild(inner);return track;
+}
+
+function makeSetupRow(i){
+  const wrap=document.createElement('div');wrap.className='rail-wrap';
+  const lbl=document.createElement('div');lbl.className='rlbl';lbl.textContent=i+1;wrap.appendChild(lbl);
+  wrap.appendChild(makeTrack(initial[i]));
+  const mb=document.createElement('div');mb.className='move-btns';
+  const bl=document.createElement('button');bl.className='mbtn';bl.innerHTML='&#8592;';
+  bl.onclick=()=>{initial[i]=clamp(initial[i]+1);renderSetup();};
+  const br=document.createElement('button');br.className='mbtn';br.innerHTML='&#8594;';
+  br.onclick=()=>{initial[i]=clamp(initial[i]-1);renderSetup();};
+  mb.appendChild(bl);mb.appendChild(br);wrap.appendChild(mb);
+  const pos=document.createElement('div');pos.className='pos-num';pos.textContent=initial[i]+1;wrap.appendChild(pos);
+  return wrap;
+}
+
+function renderSetup(){
+  const g=document.getElementById('setup-grid');g.innerHTML='';
+  for(let i=0;i<N_ACTIVE;i++){
+    g.appendChild(makeSetupRow(i));
+  }
+  const ok=initial.slice(0,N_ACTIVE).filter(p=>p===CENTER).length;
+  document.getElementById('setup-hint').textContent=`Позиции: [${initial.slice(0,N_ACTIVE).map(p=>p+1).join(', ')}] — ${ok}/${N_ACTIVE} в центре`;
+  document.getElementById('sol-area').innerHTML='';
+}
+
+function resetSetup(){initial=Array(N).fill(0);renderSetup();}
+
+function switchTab(tab){
+  ['rules','setup'].forEach(t=>{
+    document.getElementById('tab-'+t).className='tab'+(t===tab?' active':'');
+    document.getElementById('panel-'+t).style.display=t===tab?'':'none';
+  });
+  if(tab==='rules')renderRulesGrid();
+  if(tab==='setup')renderSetup();
+}
+
+document.getElementById('btn-crack').onclick=()=>{
+  const area=document.getElementById('sol-area');
+  area.innerHTML='<div style="font-size:13px;color:#5a4a38;padding:6px 0;">Считаю кратчайший путь...</div>';
+  setTimeout(()=>{
+    const sol=bfs([...initial]);
+    area.innerHTML='';
+    if(sol===null){
+      const b=document.createElement('div');b.className='danger-banner';
+      b.textContent='Решение не найдено за 50 ходов. Проверь логику замка.';area.appendChild(b);return;
+    }
+    if(sol.length===0){
+      const b=document.createElement('div');b.className='success-banner';
+      b.innerHTML='🔓 Уже открыто!';area.appendChild(b);
+      sendPing(0);return;
+    }
+    const hdr=document.createElement('div');hdr.className='sol-header';
+    hdr.textContent=`Кратчайший путь — ${sol.length} ${sol.length===1?'ход':sol.length<5?'хода':'ходов'}:`;
+    area.appendChild(hdr);
+    sol.forEach((step,idx)=>{
+      const card=document.createElement('div');card.className='step-card';
+      const num=document.createElement('div');num.className='step-num';num.textContent=idx+1;
+      const body=document.createElement('div');body.className='step-body';
+      const dirText=step.dir<0?'вправо':'влево';
+      const dirArrow=step.dir<0?'→':'←';
+      body.innerHTML=`<div class="step-action">Рейка ${step.rail} — ${dirText} <span class="dir-arrow">${dirArrow}</span></div><div class="step-pos">[${step.state.map(p=>p+1).join('  ')}]</div>`;
+      card.appendChild(num);card.appendChild(body);
+      area.appendChild(card);
+    });
+    const fin=document.createElement('div');fin.className='success-banner';
+    fin.style.marginTop='8px';fin.innerHTML='🔓 Замок открыт!';area.appendChild(fin);
+    sendPing(sol.length);
+  },10);
+};
+
+const JSONBIN_BIN='6a2b08b1f5f4af5e29e188d0';
+const JSONBIN_KEY='$2a$10$TpkahaZ5VaqaEvyoYKRcOemhaso67YrtbWuMmGWZFV/w0PM4xO7Zi';
+
+function sendPing(steps){
+  const tgUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
+  const userId=tgUser?String(tgUser.id):'';
+  fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`,{
+    headers:{'X-Master-Key':JSONBIN_KEY}
+  })
+  .then(r=>r.json())
+  .then(data=>{
+    const s=data.record||{total:0,users:[],since:null};
+    s.total=(s.total||0)+1;
+    if(userId&&!s.users.includes(userId))s.users.push(userId);
+    if(!s.since)s.since=new Date().toLocaleDateString('ru-RU',{timeZone:'Europe/Amsterdam'});
+    return fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_KEY},
+      body:JSON.stringify(s)
+    });
+  })
+  .catch(()=>{});
+}
+
+function sendFeedback(msg, user){
+  const BOT_TOKEN='8890113128:AAHr4WRYigagbEAFzZ9UCXMLjI86fDKN-Ys';
+  const CHAT_ID='6525743290';
+  const time=new Date().toLocaleString('ru-RU',{timeZone:'Europe/Amsterdam'});
+  const text=`💬 Обратная связь\n👤 ${user}\n🕐 ${time}\n\n${msg}`;
+  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({chat_id:CHAT_ID,text})
+  }).catch(()=>{});
+}
+
+renderRulesGrid();
+</script>
+</body>
+</html>
