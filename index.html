@@ -611,7 +611,19 @@ function sendPing(steps){
   }).catch(()=>{});
 }
 
+// Отметка об открытии приложения (ловим новых пользователей, total не трогаем)
+function sendVisit(){
+  const initData=window.Telegram?.WebApp?.initData||'';
+  if(!initData)return; // вне Telegram пользователя не опознать — не шлём
+  fetch(`${BACKEND}/visit`,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body:new URLSearchParams({initData})
+  }).catch(()=>{});
+}
+
 renderRulesGrid();
+sendVisit();
 </script>
 </body>
 </html>
