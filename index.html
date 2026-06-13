@@ -59,6 +59,9 @@ h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacin
 .btn.primary{background:linear-gradient(135deg,#c9a96e,#a07840);border-color:#c9a96e;color:#1a1612;font-weight:600;}
 .btn.primary:hover{background:linear-gradient(135deg,#dab97e,#b08850);transform:translateY(-1px);}
 .btn.primary:active{transform:translateY(0);}
+.btn:disabled{opacity:.4;cursor:not-allowed;}
+.btn.primary:disabled{filter:grayscale(.4);transform:none;}
+.btn.primary:disabled:hover{background:linear-gradient(135deg,#c9a96e,#a07840);transform:none;}
 
 /* логика — правила */
 .rule-row{display:flex;align-items:center;gap:6px;margin-bottom:8px;flex-wrap:wrap;}
@@ -140,6 +143,10 @@ h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacin
 .step-card.active{background:#342a1a;border-color:#c9a96e;}
 .step-card.active .step-num{box-shadow:0 0 9px rgba(201,169,110,.75);}
 .step-card.done{opacity:.45;}
+.sol-head-row{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.edit-back{background:transparent;border:1px solid #3a3028;color:#c9a96e;font-size:12px;padding:5px 11px;border-radius:16px;cursor:pointer;transition:all .15s;flex-shrink:0;}
+.edit-back:hover{background:#3a3028;border-color:#5a4a38;}
+.edit-back:active{transform:scale(.96);}
 @media (prefers-reduced-motion:reduce){.track-inner{transition:none;}.ptrack{transition:none;}}
 </style>
 </head>
@@ -169,13 +176,15 @@ h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacin
 </div>
 
 <div id="panel-setup" style="display:none;">
-  <div class="hint-sm">Золотая линия — центр замочной скважины.</div>
-  <div id="setup-grid"></div>
-  <div class="btns">
-    <button class="btn primary" id="btn-crack">Взломать 🔓</button>
-    <button class="btn" onclick="resetSetup()">Сброс позиций</button>
+  <div id="setup-editor">
+    <div class="hint-sm">Золотая линия — центр замочной скважины.</div>
+    <div id="setup-grid"></div>
+    <div class="btns">
+      <button class="btn primary" id="btn-crack">Взломать 🔓</button>
+      <button class="btn" onclick="resetSetup()">Сброс позиций</button>
+    </div>
+    <div id="setup-hint" style="font-size:12px;color:#5a4a38;margin-top:4px;"></div>
   </div>
-  <div id="setup-hint" style="font-size:12px;color:#5a4a38;margin-top:4px;"></div>
   <div id="sol-area" style="margin-top:8px;"></div>
 </div>
 
@@ -215,12 +224,25 @@ function haptic(type,style){
 }
 // Публичный HTTPS-домен твоего бота на Railway, без слэша в конце.
 // Посмотреть: Railway -> сервис -> Settings -> Networking -> Public Domain.
-const BACKEND='https://gothic-lock-production.up.railway.app';
+const BACKEND='https://gothic-bot-production.up.railway.app';
 
 const SIZE=7,CENTER=3,CELL=34,PAD=3,N=7;
 let N_ACTIVE=6;
 let rules=Array.from({length:N},()=>[]);
 let initial=Array(N).fill(0);
+
+// Доступность взлома: false = расклад уже взломан, нужен новый ввод
+let crackReady=true;
+function updateCrackBtn(){
+  const btn=document.getElementById('btn-crack');
+  if(btn)btn.disabled=!crackReady;
+  if(tg&&tg.MainButton){
+    const onSetup=document.getElementById('panel-setup').style.display!=='none';
+    (crackReady&&onSetup)?tg.MainButton.show():tg.MainButton.hide();
+  }
+}
+function markDirty(){crackReady=true;updateCrackBtn();}
+function backToEdit(){renderSetup();markDirty();} // вернуться к настройке расклада
 
 function clamp(v){return Math.max(0,Math.min(SIZE-1,v));}
 
@@ -276,6 +298,7 @@ function setActiveRails(n){
   if(w)w.style.display=n===7?'block':'none';
   renderRulesGrid();
   renderSetup();
+  markDirty();
 }
 
 function toggleFeedback(){
@@ -326,15 +349,15 @@ function renderRulesGrid(){
         const o=document.createElement('option');o.value=r;o.textContent=`рейку ${r+1}`;
         if(r===dep.dep)o.selected=true;selR.appendChild(o);
       }
-      selR.onchange=()=>{rules[i][j].dep=+selR.value;};
+      selR.onchange=()=>{rules[i][j].dep=+selR.value;markDirty();};
       const selD=document.createElement('select');
       [['= (туда же)',1],['≠ (наоборот)',-1]].forEach(([txt,val])=>{
         const o=document.createElement('option');o.value=val;o.textContent=txt;
         if(dep.dir===val)o.selected=true;selD.appendChild(o);
       });
-      selD.onchange=()=>{rules[i][j].dir=+selD.value;};
+      selD.onchange=()=>{rules[i][j].dir=+selD.value;markDirty();};
       const del=document.createElement('button');del.className='del-dep';del.textContent='×';
-      del.onclick=()=>{rules[i].splice(j,1);renderRulesGrid();};
+      del.onclick=()=>{rules[i].splice(j,1);renderRulesGrid();markDirty();};
       chip.appendChild(selR);chip.appendChild(selD);chip.appendChild(del);
       row.appendChild(chip);
     });
@@ -344,13 +367,13 @@ function renderRulesGrid(){
       const used=deps.map(d=>d.dep);
       const free=[...Array(N).keys()].filter(r=>r!==i&&!used.includes(r));
       if(!free.length)return;
-      rules[i].push({dep:free[0],dir:1});renderRulesGrid();
+      rules[i].push({dep:free[0],dir:1});renderRulesGrid();markDirty();
     };
     row.appendChild(add);g.appendChild(row);
   });
 }
 
-function resetRules(){rules=Array.from({length:N},()=>[]);renderRulesGrid();}
+function resetRules(){rules=Array.from({length:N},()=>[]);renderRulesGrid();markDirty();}
 
 function makeTrack(pinPos){
   const track=document.createElement('div');track.className='track';
@@ -382,15 +405,16 @@ function makeSetupRow(i){
   wrap.appendChild(makeTrack(initial[i]));
   const mb=document.createElement('div');mb.className='move-btns';
   const bl=document.createElement('button');bl.className='mbtn';bl.innerHTML='&#8592;';
-  bl.onclick=()=>{initial[i]=clamp(initial[i]+1);haptic('select');renderSetup();};
+  bl.onclick=()=>{initial[i]=clamp(initial[i]+1);haptic('select');renderSetup();markDirty();};
   const br=document.createElement('button');br.className='mbtn';br.innerHTML='&#8594;';
-  br.onclick=()=>{initial[i]=clamp(initial[i]-1);haptic('select');renderSetup();};
+  br.onclick=()=>{initial[i]=clamp(initial[i]-1);haptic('select');renderSetup();markDirty();};
   mb.appendChild(bl);mb.appendChild(br);wrap.appendChild(mb);
   const pos=document.createElement('div');pos.className='pos-num';pos.textContent=initial[i]+1;wrap.appendChild(pos);
   return wrap;
 }
 
 function renderSetup(){
+  document.getElementById('setup-editor').style.display=''; // вернуть редактор
   const g=document.getElementById('setup-grid');g.innerHTML='';
   for(let i=0;i<N_ACTIVE;i++){
     g.appendChild(makeSetupRow(i));
@@ -400,7 +424,7 @@ function renderSetup(){
   document.getElementById('sol-area').innerHTML='';
 }
 
-function resetSetup(){initial=Array(N).fill(0);renderSetup();}
+function resetSetup(){initial=Array(N).fill(0);renderSetup();markDirty();}
 
 function switchTab(tab){
   ['rules','setup'].forEach(t=>{
@@ -409,8 +433,8 @@ function switchTab(tab){
   });
   if(tab==='rules')renderRulesGrid();
   if(tab==='setup')renderSetup();
-  haptic('impact','light');
-  if(tg&&tg.MainButton){tab==='setup'?tg.MainButton.show():tg.MainButton.hide();}
+  if(tg)haptic('impact','light');
+  updateCrackBtn();
 }
 
 // === Анимированный проигрыватель взлома ===
@@ -458,8 +482,11 @@ function renderSolution(sol){
   const n=sol.length;
   const frames=[initial.slice(0,N_ACTIVE),...sol.map(s=>s.state.slice(0,N_ACTIVE))];
 
-  const hdr=document.createElement('div');hdr.className='sol-header';
-  hdr.textContent=`Кратчайший путь — ${n} ${plur(n)}`;area.appendChild(hdr);
+  const hdr=document.createElement('div');hdr.className='sol-header sol-head-row';
+  const hTxt=document.createElement('span');hTxt.textContent=`Кратчайший путь — ${n} ${plur(n)}`;
+  const back=document.createElement('button');back.className='edit-back';back.textContent='← Изменить расклад';
+  back.onclick=backToEdit;
+  hdr.appendChild(hTxt);hdr.appendChild(back);area.appendChild(hdr);
 
   // сцена с рейками
   const stage=document.createElement('div');stage.className='play-stage';
@@ -550,6 +577,7 @@ function runCrack(){
     const sol=bfs([...initial]);
     if(tg&&tg.MainButton)tg.MainButton.hideProgress();
     area.innerHTML='';
+    crackReady=false;updateCrackBtn(); // блокируем до нового ввода
     if(sol===null){
       const b=document.createElement('div');b.className='danger-banner';
       b.textContent='Решение не найдено за 100 ходов. Проверь логику замка.';
@@ -560,6 +588,7 @@ function runCrack(){
       area.appendChild(b);haptic('notify','success');sendPing(0);return;
     }
     renderSolution(sol);
+    document.getElementById('setup-editor').style.display='none'; // прячем верхний редактор
     sendPing(sol.length);
   },10);
 }
