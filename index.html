@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Замок-отмычка — Готика</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:system-ui,sans-serif;background:#1a1612;color:#e8dcc8;padding:16px;max-width:700px;margin:0 auto;min-height:100vh;}
@@ -118,6 +119,28 @@ h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacin
 .feedback-send{margin-top:8px;padding:6px 16px;font-size:13px;border:1px solid #c9a96e;border-radius:20px;background:transparent;cursor:pointer;color:#c9a96e;transition:all 0.15s;font-weight:500;}
 .feedback-send:hover{background:#c9a96e;color:#1a1612;}
 .feedback-sent{font-size:13px;color:#a8d878;padding:6px 0;}
+/* --- анимированный взлом --- */
+.calc-hint{font-size:13px;color:#7a6a58;padding:8px 0;letter-spacing:.04em;}
+.play-stage{background:#0e0c0a;border:1px solid #3a3028;border-radius:10px;padding:10px 8px;display:flex;flex-direction:column;gap:5px;margin-top:6px;}
+.play-row{display:flex;align-items:center;gap:8px;}
+.play-row .rlbl{width:16px;}
+.ptrack{transition:box-shadow .25s;}
+.ptrack.moving{box-shadow:0 0 0 1px #c9a96e,0 0 14px rgba(201,169,110,.55);}
+.play-bar{display:flex;align-items:center;gap:8px;margin-top:12px;}
+.play-btn{width:38px;height:38px;border-radius:50%;border:1px solid #3a3028;background:#2a2420;color:#c9a96e;font-size:14px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s;flex-shrink:0;}
+.play-btn:hover:not(:disabled){background:#3a3028;border-color:#5a4a38;}
+.play-btn:active:not(:disabled){transform:scale(.92);}
+.play-btn:disabled{opacity:.28;cursor:not-allowed;}
+.play-btn.main{width:46px;height:46px;background:linear-gradient(135deg,#c9a96e,#a07840);color:#1a1612;border-color:#c9a96e;font-size:16px;}
+.play-btn.main:hover:not(:disabled){background:linear-gradient(135deg,#dab97e,#b08850);}
+.play-meta{margin-left:auto;text-align:right;line-height:1.35;}
+.play-count{font-size:11px;color:#7a6a58;letter-spacing:.06em;text-transform:uppercase;}
+.play-action{font-size:13px;color:#e8dcc8;font-weight:600;}
+.step-card{cursor:pointer;}
+.step-card.active{background:#342a1a;border-color:#c9a96e;}
+.step-card.active .step-num{box-shadow:0 0 9px rgba(201,169,110,.75);}
+.step-card.done{opacity:.45;}
+@media (prefers-reduced-motion:reduce){.track-inner{transition:none;}.ptrack{transition:none;}}
 </style>
 </head>
 <body>
@@ -170,6 +193,30 @@ h1{font-size:18px;font-weight:600;margin-bottom:16px;color:#c9a96e;letter-spacin
 </div>
 
 <script>
+// === Telegram WebApp + бэкенд ===
+const tg=window.Telegram?.WebApp;
+if(tg){
+  tg.ready();
+  tg.expand();
+  // Красим хром Telegram под готику, а не наоборот:
+  try{tg.setHeaderColor('#1a1612');}catch(e){}
+  try{tg.setBackgroundColor('#1a1612');}catch(e){}
+  // Чтобы свайп вниз не закрывал апп во время вожжания рейками:
+  try{tg.disableVerticalSwipes&&tg.disableVerticalSwipes();}catch(e){}
+}
+// Тактильный отклик (если доступен). type: 'impact'|'notify'|'select'
+function haptic(type,style){
+  try{
+    const h=tg&&tg.HapticFeedback;if(!h)return;
+    if(type==='notify')h.notificationOccurred(style||'success');
+    else if(type==='select')h.selectionChanged();
+    else h.impactOccurred(style||'light');
+  }catch(e){}
+}
+// Публичный HTTPS-домен твоего бота на Railway, без слэша в конце.
+// Посмотреть: Railway -> сервис -> Settings -> Networking -> Public Domain.
+const BACKEND='https://gothic-lock-production.up.railway.app';
+
 const SIZE=7,CENTER=3,CELL=34,PAD=3,N=7;
 let N_ACTIVE=6;
 let rules=Array.from({length:N},()=>[]);
@@ -246,13 +293,18 @@ function fbCount(){
 }
 
 function sendFeedback(){
-  const msg=document.getElementById('fb-text').value.trim();
+  const t=document.getElementById('fb-text');
+  const msg=t.value.trim();
   if(!msg)return;
-  const user=window.Telegram?.WebApp?.initDataUnsafe?.user;
-  const userName=user?(user.username?'@'+user.username:user.first_name)||'Аноним':'Аноним';
-  sendFeedback(msg, userName);
+  const initData=window.Telegram?.WebApp?.initData||'';
+  const body=new URLSearchParams({initData,msg});
+  fetch(`${BACKEND}/feedback`,{
+    method:'POST',
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body
+  }).catch(()=>{});
   document.getElementById('fb-sent').style.display='block';
-  document.getElementById('fb-text').value='';
+  t.value='';
   document.getElementById('fb-counter').textContent='0 / 300';
   setTimeout(()=>{
     document.getElementById('fb-box').style.display='none';
@@ -330,9 +382,9 @@ function makeSetupRow(i){
   wrap.appendChild(makeTrack(initial[i]));
   const mb=document.createElement('div');mb.className='move-btns';
   const bl=document.createElement('button');bl.className='mbtn';bl.innerHTML='&#8592;';
-  bl.onclick=()=>{initial[i]=clamp(initial[i]+1);renderSetup();};
+  bl.onclick=()=>{initial[i]=clamp(initial[i]+1);haptic('select');renderSetup();};
   const br=document.createElement('button');br.className='mbtn';br.innerHTML='&#8594;';
-  br.onclick=()=>{initial[i]=clamp(initial[i]-1);renderSetup();};
+  br.onclick=()=>{initial[i]=clamp(initial[i]-1);haptic('select');renderSetup();};
   mb.appendChild(bl);mb.appendChild(br);wrap.appendChild(mb);
   const pos=document.createElement('div');pos.className='pos-num';pos.textContent=initial[i]+1;wrap.appendChild(pos);
   return wrap;
@@ -357,75 +409,176 @@ function switchTab(tab){
   });
   if(tab==='rules')renderRulesGrid();
   if(tab==='setup')renderSetup();
+  haptic('impact','light');
+  if(tg&&tg.MainButton){tab==='setup'?tg.MainButton.show():tg.MainButton.hide();}
 }
 
-document.getElementById('btn-crack').onclick=()=>{
+// === Анимированный проигрыватель взлома ===
+function plur(n){return n===1?'ход':(n>=2&&n<=4?'хода':'ходов');}
+
+function makePlayTrack(pos){
+  const track=document.createElement('div');track.className='track ptrack';
+  const cl=document.createElement('div');cl.className='center-line';track.appendChild(cl);
+  const inner=document.createElement('div');inner.className='track-inner';
+  inner.style.width=((SIZE+PAD*2)*CELL)+'px';
+  inner.style.left=((CENTER-(pos+PAD))*CELL)+'px';
+  for(let j=0;j<SIZE+PAD*2;j++){
+    const rj=j-PAD;
+    const c=document.createElement('div');
+    const plate=document.createElement('div');plate.className='rail-plate';
+    if(rj<0||rj>=SIZE){
+      c.className='tcell pad';
+      plate.style.cssText='background:transparent;border:none;box-shadow:none;';
+    } else {
+      c.dataset.rj=rj;
+      const isPin=rj===pos;
+      c.className='tcell'+(isPin?' pin'+(pos===CENTER?' pin-ok':''):'');
+      const d=document.createElement('div');d.className='pin-dot';d.style.display=isPin?'block':'none';
+      plate.appendChild(d);
+    }
+    c.appendChild(plate);inner.appendChild(c);
+  }
+  track.appendChild(inner);track._inner=inner;return track;
+}
+
+function updatePlayTrack(track,pos){
+  const inner=track._inner;
+  inner.style.left=((CENTER-(pos+PAD))*CELL)+'px';
+  inner.querySelectorAll('.tcell:not(.pad)').forEach(c=>{
+    const rj=+c.dataset.rj,isPin=rj===pos;
+    c.className='tcell'+(isPin?' pin'+(pos===CENTER?' pin-ok':''):'');
+    const dot=c.querySelector('.pin-dot');if(dot)dot.style.display=isPin?'block':'none';
+  });
+}
+
+function ctrlBtn(txt,main){const b=document.createElement('button');b.className='play-btn'+(main?' main':'');b.textContent=txt;return b;}
+
+function renderSolution(sol){
+  const area=document.getElementById('sol-area');area.innerHTML='';
+  const n=sol.length;
+  const frames=[initial.slice(0,N_ACTIVE),...sol.map(s=>s.state.slice(0,N_ACTIVE))];
+
+  const hdr=document.createElement('div');hdr.className='sol-header';
+  hdr.textContent=`Кратчайший путь — ${n} ${plur(n)}`;area.appendChild(hdr);
+
+  // сцена с рейками
+  const stage=document.createElement('div');stage.className='play-stage';
+  const tracks=[];
+  for(let i=0;i<N_ACTIVE;i++){
+    const row=document.createElement('div');row.className='play-row';
+    const lbl=document.createElement('div');lbl.className='rlbl';lbl.textContent=i+1;row.appendChild(lbl);
+    const t=makePlayTrack(frames[0][i]);row.appendChild(t);tracks.push(t);
+    stage.appendChild(row);
+  }
+  area.appendChild(stage);
+
+  // панель управления
+  const bar=document.createElement('div');bar.className='play-bar';
+  const bReset=ctrlBtn('↺'),bPrev=ctrlBtn('⏮'),bPlay=ctrlBtn('▶',true),bNext=ctrlBtn('⏭');
+  const meta=document.createElement('div');meta.className='play-meta';
+  const countEl=document.createElement('div');countEl.className='play-count';
+  const actionEl=document.createElement('div');actionEl.className='play-action';
+  meta.appendChild(countEl);meta.appendChild(actionEl);
+  bar.appendChild(bReset);bar.appendChild(bPrev);bar.appendChild(bPlay);bar.appendChild(bNext);bar.appendChild(meta);
+  area.appendChild(bar);
+
+  // текстовый список ходов
+  const list=document.createElement('div');list.style.marginTop='12px';
+  const cards=[];
+  sol.forEach((step,idx)=>{
+    const card=document.createElement('div');card.className='step-card';
+    const num=document.createElement('div');num.className='step-num';num.textContent=idx+1;
+    const body=document.createElement('div');body.className='step-body';
+    const dirText=step.dir<0?'вправо':'влево',dirArrow=step.dir<0?'→':'←';
+    body.innerHTML=`<div class="step-action">Рейка ${step.rail} — ${dirText} <span class="dir-arrow">${dirArrow}</span></div><div class="step-pos">[${step.state.slice(0,N_ACTIVE).map(p=>p+1).join('  ')}]</div>`;
+    card.appendChild(num);card.appendChild(body);
+    card.onclick=()=>{pause();goTo(idx+1);};
+    list.appendChild(card);cards.push(card);
+  });
+  area.appendChild(list);
+
+  const fin=document.createElement('div');fin.className='success-banner';
+  fin.style.cssText='margin-top:10px;display:none;';fin.innerHTML='🔓 Замок открыт!';
+  area.appendChild(fin);
+
+  let cur=0,timer=null,playing=false;
+
+  function setMoving(idx){tracks.forEach((t,i)=>t.classList.toggle('moving',i===idx));}
+  function paint(){
+    cards.forEach((c,idx)=>{c.classList.toggle('done',idx<cur);c.classList.toggle('active',idx===cur&&cur<n);});
+    countEl.textContent=cur===0?`Старт · 0 / ${n}`:`Ход ${cur} / ${n}`;
+    if(cur<n){const s=sol[cur];actionEl.textContent=`Дальше: рейка ${s.rail} ${s.dir<0?'вправо →':'влево ←'}`;}
+    else actionEl.textContent='Замок открыт';
+    fin.style.display=cur>=n?'flex':'none';
+    bPrev.disabled=cur===0;bNext.disabled=cur>=n;
+  }
+  function goTo(idx){
+    setMoving(-1);
+    for(let i=0;i<N_ACTIVE;i++)updatePlayTrack(tracks[i],frames[idx][i]);
+    cur=idx;paint();
+  }
+  function stepForward(){
+    if(cur>=n)return false;
+    setMoving(sol[cur].rail-1);
+    const f=frames[cur+1];
+    for(let i=0;i<N_ACTIVE;i++)updatePlayTrack(tracks[i],f[i]);
+    cur++;haptic('impact','light');paint();
+    setTimeout(()=>setMoving(-1),350);
+    if(cur>=n)haptic('notify','success');
+    return true;
+  }
+  function play(){
+    if(cur>=n)goTo(0);
+    playing=true;bPlay.textContent='⏸';
+    timer=setInterval(()=>{if(!stepForward()||cur>=n)pause();},760);
+  }
+  function pause(){playing=false;bPlay.textContent='▶';if(timer){clearInterval(timer);timer=null;}}
+
+  bReset.onclick=()=>{pause();goTo(0);};
+  bPrev.onclick=()=>{pause();if(cur>0)goTo(cur-1);};
+  bNext.onclick=()=>{pause();stepForward();};
+  bPlay.onclick=()=>{playing?pause():play();};
+
+  goTo(0); // статичный старт; анимация — по кнопке ▶
+}
+
+function runCrack(){
   const area=document.getElementById('sol-area');
-  area.innerHTML='<div style="font-size:13px;color:#5a4a38;padding:6px 0;">Считаю кратчайший путь...</div>';
+  area.innerHTML='<div class="calc-hint">Подбираю кратчайший путь…</div>';
+  if(tg&&tg.MainButton)tg.MainButton.showProgress();
   setTimeout(()=>{
     const sol=bfs([...initial]);
+    if(tg&&tg.MainButton)tg.MainButton.hideProgress();
     area.innerHTML='';
     if(sol===null){
       const b=document.createElement('div');b.className='danger-banner';
-      b.textContent='Решение не найдено за 50 ходов. Проверь логику замка.';area.appendChild(b);return;
+      b.textContent='Решение не найдено за 100 ходов. Проверь логику замка.';
+      area.appendChild(b);haptic('notify','error');return;
     }
     if(sol.length===0){
-      const b=document.createElement('div');b.className='success-banner';
-      b.innerHTML='🔓 Уже открыто!';area.appendChild(b);
-      sendPing(0);return;
+      const b=document.createElement('div');b.className='success-banner';b.innerHTML='🔓 Уже открыто!';
+      area.appendChild(b);haptic('notify','success');sendPing(0);return;
     }
-    const hdr=document.createElement('div');hdr.className='sol-header';
-    hdr.textContent=`Кратчайший путь — ${sol.length} ${sol.length===1?'ход':sol.length<5?'хода':'ходов'}:`;
-    area.appendChild(hdr);
-    sol.forEach((step,idx)=>{
-      const card=document.createElement('div');card.className='step-card';
-      const num=document.createElement('div');num.className='step-num';num.textContent=idx+1;
-      const body=document.createElement('div');body.className='step-body';
-      const dirText=step.dir<0?'вправо':'влево';
-      const dirArrow=step.dir<0?'→':'←';
-      body.innerHTML=`<div class="step-action">Рейка ${step.rail} — ${dirText} <span class="dir-arrow">${dirArrow}</span></div><div class="step-pos">[${step.state.map(p=>p+1).join('  ')}]</div>`;
-      card.appendChild(num);card.appendChild(body);
-      area.appendChild(card);
-    });
-    const fin=document.createElement('div');fin.className='success-banner';
-    fin.style.marginTop='8px';fin.innerHTML='🔓 Замок открыт!';area.appendChild(fin);
+    renderSolution(sol);
     sendPing(sol.length);
   },10);
-};
+}
+document.getElementById('btn-crack').onclick=runCrack;
 
-const JSONBIN_BIN='6a2b08b1f5f4af5e29e188d0';
-const JSONBIN_KEY='$2a$10$TpkahaZ5VaqaEvyoYKRcOemhaso67YrtbWuMmGWZFV/w0PM4xO7Zi';
-
-function sendPing(steps){
-  const tgUser=window.Telegram?.WebApp?.initDataUnsafe?.user;
-  const userId=tgUser?String(tgUser.id):'';
-  fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}/latest`,{
-    headers:{'X-Master-Key':JSONBIN_KEY}
-  })
-  .then(r=>r.json())
-  .then(data=>{
-    const s=data.record||{total:0,users:[],since:null};
-    s.total=(s.total||0)+1;
-    if(userId&&!s.users.includes(userId))s.users.push(userId);
-    if(!s.since)s.since=new Date().toLocaleDateString('ru-RU',{timeZone:'Europe/Amsterdam'});
-    return fetch(`https://api.jsonbin.io/v3/b/${JSONBIN_BIN}`,{
-      method:'PUT',
-      headers:{'Content-Type':'application/json','X-Master-Key':JSONBIN_KEY},
-      body:JSON.stringify(s)
-    });
-  })
-  .catch(()=>{});
+// MainButton как нативная кнопка «Взломать» (только внутри Telegram)
+if(tg&&tg.MainButton){
+  try{tg.MainButton.setParams({text:'🔓 ВЗЛОМАТЬ ЗАМОК',color:'#c9a96e',text_color:'#1a1612',is_visible:false});}catch(e){}
+  tg.MainButton.onClick(runCrack);
+  document.getElementById('btn-crack').style.display='none';
 }
 
-function sendFeedback(msg, user){
-  const BOT_TOKEN='8890113128:AAHr4WRYigagbEAFzZ9UCXMLjI86fDKN-Ys';
-  const CHAT_ID='6525743290';
-  const time=new Date().toLocaleString('ru-RU',{timeZone:'Europe/Amsterdam'});
-  const text=`💬 Обратная связь\n👤 ${user}\n🕐 ${time}\n\n${msg}`;
-  fetch(`https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`,{
+function sendPing(steps){
+  const initData=window.Telegram?.WebApp?.initData||'';
+  const body=new URLSearchParams({initData,steps:String(steps)});
+  fetch(`${BACKEND}/ping`,{
     method:'POST',
-    headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({chat_id:CHAT_ID,text})
+    headers:{'Content-Type':'application/x-www-form-urlencoded'},
+    body
   }).catch(()=>{});
 }
 
